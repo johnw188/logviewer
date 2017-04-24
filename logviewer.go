@@ -2,7 +2,8 @@
 // Use of this source code is governed by a MIT license that can
 // be found in the LICENSE file.
 
-// Package logviewer provides a terminal UI for viewing log streams from multiple sources
+// Package logviewer provides a terminal based UI for viewing log streams from multiple sources. Implemented using
+// @gizak's awesome termui lib
 package logviewer
 
 import (
