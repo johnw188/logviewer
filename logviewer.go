@@ -66,8 +66,8 @@ func newLogFeed(name string, maxHistory int) *Feed {
 	return &feed
 }
 
-// AddLogFeed adds a new Feed to the Viewer, returning the index of the Feed for use in
-// future calls to AddLogLine
+// AddLogFeed adds a new Feed to the Viewer with a given history buffer size. Returns a
+// pointer to a Feed that can be used to display logs in this feed
 func (v*Viewer) AddLogFeed(name string, maxHistory int) *Feed {
 	feed := newLogFeed(name, maxHistory)
 	feed.viewer = v
