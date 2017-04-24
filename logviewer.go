@@ -10,60 +10,67 @@ import (
 	"bytes"
 	"strconv"
 	"github.com/gizak/termui/extra"
+	"errors"
+	"time"
 )
 
-// LogLevel enables filtering/coloring
-type LogLevel uint16
+const HelpText string = "[h] and [l] to navigate, [t] to show timestamps, [q] to exit"
 
-// 4 log levels by default
-const (
-	LogLevelDebug LogLevel = iota
-	LogLevelInfo
-	LogLevelWarn
-	LogLevelError
-)
-
-// A LogLine represents a single line of log content
-type LogLine struct {
-	Log string
-	LogLevel LogLevel
+// A Line represents a single line of log content
+type Line struct {
+	Log       string
+	Timestamp time.Time
 }
 
-type logFeed struct {
-	name string
-	logs []*LogLine
+// A Viewer is used to display log data from one or more sources
+type Viewer struct {
+	// Name for the viewer, displayed in the help text at the top of the screen
+	feeds         []*Feed
+	tabpane       *extra.Tabpane
+	title         *ui.Par
+	initialized   bool
+	showTimestamp bool
+}
+
+type Feed struct {
+	name       string
+	logs       []*Line
 	maxHistory int
-	par *ui.Par
+	par        *ui.Par
+	viewer     *Viewer
 }
 
-type LogViewer struct {
-	feeds []*logFeed
-	tabpane *extra.Tabpane
-	uiInit bool
-}
-
-func NewLogViewer() *LogViewer {
-	viewer := &LogViewer{
-		feeds:   []*logFeed{},
-		tabpane: extra.NewTabpane(),
-		uiInit:  false,
+// NewViewer initializes a Viewer with a given name
+func NewViewer(name string) *Viewer {
+	viewer := &Viewer{
+		feeds:         []*Feed{},
+		tabpane:       extra.NewTabpane(),
+		title:         ui.NewPar("[" + name + "](fg-green,fg-bold)   " + HelpText),
+		initialized:   false,
+		showTimestamp: false,
 	}
-	viewer.tabpane.Border = false
+	viewer.tabpane.Border = true
+	viewer.title.Height = 1
+	viewer.title.Border = false
+
 	return viewer
 }
 
-func newLogFeed(name string, maxHistory int) *logFeed {
-	feed := logFeed{
+func newLogFeed(name string, maxHistory int) *Feed {
+	feed := Feed{
 		name:       name,
-		logs:       []*LogLine{},
+		logs:       []*Line{},
 		maxHistory: maxHistory,
 	}
 	return &feed
 }
 
-func (lv* LogViewer) AddLogFeed(name string, maxHistory int) int {
+// AddLogFeed adds a new Feed to the Viewer, returning the index of the Feed for use in
+// future calls to AddLogLine
+func (v*Viewer) AddLogFeed(name string, maxHistory int) *Feed {
 	feed := newLogFeed(name, maxHistory)
-	lv.feeds = append(lv.feeds, feed)
+	feed.viewer = v
+	v.feeds = append(v.feeds, feed)
 
 	feed.par = ui.NewPar(" ")
 	feed.par.Border = false
@@ -71,29 +78,38 @@ func (lv* LogViewer) AddLogFeed(name string, maxHistory int) int {
 	tab := extra.NewTab(feed.name)
 	tab.AddBlocks(feed.par)
 
-	lv.tabpane.SetTabs(append(lv.tabpane.Tabs, *tab)...)
-	lv.render()
-	return len(lv.feeds) - 1
+	v.tabpane.SetTabs(append(v.tabpane.Tabs, *tab)...)
+	v.render()
+	return feed
 }
 
-func (lv* LogViewer) RemoveLogFeed(idx int) {
-	tabs := lv.tabpane.Tabs
-	lv.tabpane.SetTabs(append(tabs[:idx],tabs[idx+1:]...)...)
-	lv.render()
+// RemoveLogFeed removes a given Feed from the Viewer
+func (v*Viewer) RemoveLogFeed(f *Feed) error {
+	for i := range v.feeds {
+		if v.feeds[i] == f {
+			// TODO this probably leaks
+			tabs := v.tabpane.Tabs
+			v.tabpane.SetTabs(append(tabs[:i], tabs[i+1:]...)...)
+			v.render()
+			return nil
+		}
+	}
+	return errors.New("Feed not found")
 }
 
-func (lv* LogViewer) AddLogLine(l *LogLine, idx int) {
-	f := lv.feeds[idx]
+// AddLogLine adds a Line to a Feed,
+func (f*Feed) AddLogLine(l *Line) {
 	f.logs = append(f.logs, l)
+	// TODO circular queue with size of maxHistory
 	if len(f.logs) > f.maxHistory {
 		over := len(f.logs) - f.maxHistory
 		f.logs = f.logs[over:]
 	}
 	f.updatePar()
-	lv.render()
+	f.viewer.render()
 }
 
-func (f* logFeed) updatePar() {
+func (f*Feed) updatePar() {
 	h := f.par.GetHeight()
 
 	var text bytes.Buffer
@@ -102,26 +118,31 @@ func (f* logFeed) updatePar() {
 		logs = logs[len(f.logs)-h:]
 	}
 	for i, line := range logs {
+		if f.viewer.showTimestamp {
+			text.WriteString("[")
+			text.WriteString(line.Timestamp.Format("2006-01-02T15:04:05-0700"))
+			text.WriteString("] ")
+		}
 		text.WriteString(line.Log)
-		if i != len(logs) - 1 {
+		if i != len(logs)-1 {
 			text.WriteString("\n")
 		}
 	}
 	f.par.Text = text.String()
 }
 
-func (lv* LogViewer) titleString(width int) string {
+func (v*Viewer) titleString(width int) string {
 	var title bytes.Buffer
-	for i, feed := range lv.feeds {
+	for i, feed := range v.feeds {
 		title.WriteString("[")
 		title.WriteString(strconv.Itoa(i))
 		title.WriteString("]")
-		if len(feed.name) + title.Len() > width - 3 {
+		if len(feed.name)+title.Len() > width-3 {
 
 		}
 		title.WriteString(feed.name)
 		title.WriteString(" ")
-		if title.Len() > width - 5 {
+		if title.Len() > width-5 {
 			title.WriteString("...")
 			break
 		}
@@ -129,35 +150,38 @@ func (lv* LogViewer) titleString(width int) string {
 	return title.String()
 }
 
-func (lv* LogViewer) render() {
-	if lv.uiInit {
-		lv.updateDimensions()
+func (v*Viewer) render() {
+	if v.initialized {
+		v.updateDimensions()
 		ui.Body.Align()
 		ui.Render(ui.Body)
 	}
 }
 
-func (lv* LogViewer) updateFeedDimensions(w, h int) {
-	for _, f := range lv.feeds {
+func (v*Viewer) updateFeedDimensions(w, h int) {
+	for _, f := range v.feeds {
 		f.par.Width = w
 		f.par.Height = h
 	}
 }
 
-func (lv* LogViewer) Display() {
+// Display starts the viewer. This call will block until the log display is exited by the user
+func (v*Viewer) Display() {
 	err := ui.Init()
 	if err != nil {
 		panic(err)
 	}
 	defer ui.Close()
-	lv.uiInit = true
+	v.initialized = true
 
 	ui.Body.AddRows(
 		ui.NewRow(
-			ui.NewCol(12, 0, lv.tabpane)))
+			ui.NewCol(12, 0, v.title)),
+		ui.NewRow(
+			ui.NewCol(12, 0, v.tabpane)))
 
 	ui.Handle("/sys/wnd/resize", func(ui.Event) {
-		lv.render()
+		v.render()
 	})
 
 	ui.Handle("/sys/kbd/q", func(ui.Event) {
@@ -165,24 +189,30 @@ func (lv* LogViewer) Display() {
 	})
 
 	ui.Handle("/sys/kbd/l", func(ui.Event) {
-		lv.tabpane.SetActiveRight()
-		lv.render()
+		v.tabpane.SetActiveRight()
+		v.render()
 	})
 
 	ui.Handle("/sys/kbd/h", func(ui.Event) {
-		lv.tabpane.SetActiveLeft()
-		lv.render()
+		v.tabpane.SetActiveLeft()
+		v.render()
 	})
 
-	lv.render()
+	ui.Handle("/sys/kbd/t", func(ui.Event) {
+		v.showTimestamp = !v.showTimestamp
+		for _, f := range v.feeds {
+			f.updatePar()
+		}
+		v.render()
+	})
+
+	v.render()
 	ui.Loop()
 }
 
-func (lv* LogViewer) updateDimensions() {
+func (v*Viewer) updateDimensions() {
 	w := ui.TermWidth()
-	h := ui.TermHeight() - lv.tabpane.Height
+	h := ui.TermHeight() - v.tabpane.Height
 	ui.Body.Width = w
-	lv.updateFeedDimensions(w, h)
+	v.updateFeedDimensions(w, h)
 }
-
-
