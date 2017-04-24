@@ -24,7 +24,6 @@ type Line struct {
 
 // A Viewer is used to display log data from one or more sources
 type Viewer struct {
-	// Name for the viewer, displayed in the help text at the top of the screen
 	feeds         []*Feed
 	tabpane       *extra.Tabpane
 	title         *ui.Par
@@ -32,6 +31,7 @@ type Viewer struct {
 	showTimestamp bool
 }
 
+// A Feed represents an independent stream of log data
 type Feed struct {
 	name       string
 	logs       []*Line
@@ -97,7 +97,7 @@ func (v*Viewer) RemoveLogFeed(f *Feed) error {
 	return errors.New("Feed not found")
 }
 
-// AddLogLine adds a Line to a Feed,
+// AddLogLine adds a Line to a Feed and renders the result in the user's terminal
 func (f*Feed) AddLogLine(l *Line) {
 	f.logs = append(f.logs, l)
 	// TODO circular queue with size of maxHistory
