@@ -68,7 +68,7 @@ func newLogFeed(name string, maxHistory int) *Feed {
 
 // AddLogFeed adds a new Feed to the Viewer with a given history buffer size. Returns a
 // pointer to a Feed that can be used to display logs in this feed
-func (v*Viewer) AddLogFeed(name string, maxHistory int) *Feed {
+func (v *Viewer) AddLogFeed(name string, maxHistory int) *Feed {
 	feed := newLogFeed(name, maxHistory)
 	feed.viewer = v
 	v.feeds = append(v.feeds, feed)
@@ -85,7 +85,7 @@ func (v*Viewer) AddLogFeed(name string, maxHistory int) *Feed {
 }
 
 // RemoveLogFeed removes a given Feed from the Viewer
-func (v*Viewer) RemoveLogFeed(f *Feed) error {
+func (v *Viewer) RemoveLogFeed(f *Feed) error {
 	for i := range v.feeds {
 		if v.feeds[i] == f {
 			// TODO this probably leaks
@@ -99,7 +99,7 @@ func (v*Viewer) RemoveLogFeed(f *Feed) error {
 }
 
 // AddLogLine adds a Line to a Feed and renders the result in the user's terminal
-func (f*Feed) AddLogLine(l *Line) {
+func (f *Feed) AddLogLine(l *Line) {
 	f.logs = append(f.logs, l)
 	// TODO circular queue with size of maxHistory
 	if len(f.logs) > f.maxHistory {
@@ -110,7 +110,7 @@ func (f*Feed) AddLogLine(l *Line) {
 	f.viewer.render()
 }
 
-func (f*Feed) updatePar() {
+func (f *Feed) updatePar() {
 	h := f.par.GetHeight()
 
 	var text bytes.Buffer
@@ -132,7 +132,7 @@ func (f*Feed) updatePar() {
 	f.par.Text = text.String()
 }
 
-func (v*Viewer) titleString(width int) string {
+func (v *Viewer) titleString(width int) string {
 	var title bytes.Buffer
 	for i, feed := range v.feeds {
 		title.WriteString("[")
@@ -151,7 +151,7 @@ func (v*Viewer) titleString(width int) string {
 	return title.String()
 }
 
-func (v*Viewer) render() {
+func (v *Viewer) render() {
 	if v.initialized {
 		v.updateDimensions()
 		ui.Body.Align()
@@ -159,7 +159,7 @@ func (v*Viewer) render() {
 	}
 }
 
-func (v*Viewer) updateFeedDimensions(w, h int) {
+func (v *Viewer) updateFeedDimensions(w, h int) {
 	for _, f := range v.feeds {
 		f.par.Width = w
 		f.par.Height = h
@@ -167,7 +167,7 @@ func (v*Viewer) updateFeedDimensions(w, h int) {
 }
 
 // Display starts the viewer. This call will block until the log display is exited by the user
-func (v*Viewer) Display() {
+func (v *Viewer) Display() {
 	err := ui.Init()
 	if err != nil {
 		panic(err)
@@ -211,7 +211,7 @@ func (v*Viewer) Display() {
 	ui.Loop()
 }
 
-func (v*Viewer) updateDimensions() {
+func (v *Viewer) updateDimensions() {
 	w := ui.TermWidth()
 	h := ui.TermHeight() - v.tabpane.Height
 	ui.Body.Width = w
